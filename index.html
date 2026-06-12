@@ -399,6 +399,7 @@ function w(ms){return new Promise(r=>setTimeout(r,ms));}
 function mkPrompt(d){
   return`你是墨翰設計的品牌策略分析師，專精餐飲、飲料、商業空間品牌設計。
 請根據以下問卷，輸出品牌策略分析報告。語言：繁體中文。語氣：直接、專業、有結論。
+重要：不要使用任何 Markdown 符號，包括 ###、##、#、**、*、---、- 等，直接輸出純文字。
 
 品牌名稱：${d.cnm}（${d.enm||'無英文'}）
 命名含義：${d.nmr}
@@ -471,8 +472,9 @@ function showResult(d,text){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
-function rs(b,c){if(!c)return'';return`<div class="res-sec"><div class="res-stitle">${b}</div><div class="res-txt">${e(c.trim())}</div></div>`;}
-function rn(c){if(!c)return'';return`<div class="res-sec"><div class="res-stitle">📐 DESIGNER BRIEF</div><div class="res-note"><div class="res-note-t">設計師執行備忘</div><div class="res-note-c">${e(c.trim())}</div></div></div>`;}
+function md(s){return e(s).replace(/\*\*(.+?)\*\*/g,'$1').replace(/^#{1,3} */gm,'').replace(/^[-*] /gm,'');}
+function rs(b,c){if(!c)return'';return`<div class="res-sec"><div class="res-stitle">${b}</div><div class="res-txt">${md(c.trim())}</div></div>`;}
+function rn(c){if(!c)return'';return`<div class="res-sec"><div class="res-stitle">📐 DESIGNER BRIEF</div><div class="res-note"><div class="res-note-t">設計師執行備忘</div><div class="res-note-c">${md(c.trim())}</div></div></div>`;}
 
 function buildCard(d,sec,date){
   const card=document.getElementById('print-card');
@@ -496,7 +498,7 @@ function buildCard(d,sec,date){
     </div>`;
 }
 function pc(b,c,full){if(!c)return'';return`<div class="pc-sec${full?' full':''}"><div class="pc-st">${b}</div><div class="pc-txt">${e(c.trim())}</div></div>`;}
-function pcn(c){if(!c)return'';return`<div class="pc-sec full"><div class="pc-st">📐 DESIGNER BRIEF</div><div class="pc-note"><div class="pc-note-t">設計師執行備忘</div><div class="pc-note-c">${e(c.trim())}</div></div></div>`;}
+function pcn(c){if(!c)return'';return`<div class="pc-sec full"><div class="pc-st">📐 DESIGNER BRIEF</div><div class="pc-note"><div class="pc-note-t">設計師執行備忘</div><div class="pc-note-c">${md(c.trim())}</div></div></div>`;}
 
 async function dlPNG(name){
   const btn=document.getElementById('btn-png');
