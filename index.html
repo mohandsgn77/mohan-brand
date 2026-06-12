@@ -1189,7 +1189,7 @@ function delay(ms) { return new Promise(res => setTimeout(res, ms)); }
 
 // ─── PROMPT BUILDER ─────────────────────────────────────────
 function buildPrompt(d) {
-  return `你是墨翰設計的品牌策略分析師，專精於餐飲品牌、飲料店、商業空間設計。請根據以下品牌問卷資料，輸出一份完整的品牌策略分析報告，供設計師直接執行使用。
+  return `你是墨翰設計的品牌策略分析師。請根據以下品牌問卷，輸出一份JSON格式的品牌策略分析報告。
 
 【品牌資料】
 品牌名稱：${d.brandNameCN}（${d.brandNameEN || '無英文名稱'}）
@@ -1211,157 +1211,225 @@ LOGO 類型：${d.logoType || '未指定'}
 1年目標：${d.goalShort || '未填寫'}
 長期目標：${d.goalLong || '未填寫'}
 
-請依照以下六個模組輸出，每個模組用【】標記標題，輸出語言使用繁體中文，語氣直接專業。重要：不要使用任何 Markdown 符號，包括 ###、##、#、**、*、---、- 等，直接輸出純文字：
-
-【市場定位分析】
-分析這個品牌的市場座標：在同產業中，它的差異化優勢是什麼？競爭紅海在哪裡？應該佔領哪個品牌位置？（3-5句）
-
-【目標客群人格畫像】
-根據年齡層、消費層級、品牌理念，描繪主力客群的真實樣貌：他/她是誰？在意什麼？什麼設計語言能讓他產生信任感？（3-5句）
-
-【品牌人格與心理學定位】
-套用品牌人格原型（eg. 英雄、創造者、照顧者、統治者）判斷這個品牌最接近哪種原型，並說明設計執行時應如何具體表現。（3-5句）
-
-【色彩策略建議】
-根據品牌定位、目標族群、色彩偏好，推薦主色、輔助色、強調色（每色附上色彩心理學說明），並說明使用禁忌。格式：
-主色：___（說明）
-輔助色：___（說明）
-強調色：___（說明）
-禁用色：___（原因）
-
-【LOGO 視覺策略建議】
-根據品牌故事、風格偏好、象徵元素，給出設計師可直接執行的 LOGO 方向建議。需包含：造型語言、字體風格方向、構圖建議、元素整合邏輯。（5-7句）
-
-【設計師執行注意事項】
-列出 3-5 點設計師在執行時最需要注意的策略重點，包含應強化的方向和應避免的錯誤。`;
+請只輸出以下JSON格式，不要有任何其他文字、不要使用Markdown符號：
+{
+  "market": "市場定位分析內容（3-5句）",
+  "persona": "目標客群人格畫像（3-5句）",
+  "archetypes": [
+    {"name": "原型名稱1", "pct": 60, "desc": "此原型在設計執行上的具體表現（1-2句）"},
+    {"name": "原型名稱2", "pct": 40, "desc": "此原型在設計執行上的具體表現（1-2句）"}
+  ],
+  "archetype_analysis": "整體品牌人格定位說明（2-3句）",
+  "colors": [
+    {"role": "主色", "name": "顏色名稱", "hex": "#XXXXXX", "desc": "色彩心理學說明"},
+    {"role": "輔助色", "name": "顏色名稱", "hex": "#XXXXXX", "desc": "說明"},
+    {"role": "強調色", "name": "顏色名稱", "hex": "#XXXXXX", "desc": "說明"},
+    {"role": "禁用色", "name": "顏色名稱", "hex": "#XXXXXX", "desc": "原因"}
+  ],
+  "color_analysis": "整體色彩策略說明（2-3句）",
+  "visual": "LOGO視覺策略建議（5-7句）",
+  "designer_notes": ["執行重點1", "執行重點2", "執行重點3", "執行重點4", "執行重點5"],
+  "market_scores": [
+    {"label": "市場稀缺性", "score": 75},
+    {"label": "品牌辨識度", "score": 90},
+    {"label": "消費者共鳴", "score": 85},
+    {"label": "競爭差異化", "score": 88},
+    {"label": "執行可行性", "score": 90}
+  ],
+  "brand_values": "品牌核心價值說明（2-3句）",
+  "market_position": "市場競爭定位說明（2-3句）",
+  "growth_vision": "成長路徑展望說明（2-3句）"
+}`;
 }
 
 // ─── RENDER REPORT ──────────────────────────────────────────
 function renderReport(data, aiText) {
-  const sections = parseAISections(aiText);
+  let report;
+  try {
+    const clean = aiText.replace(/```json|```/g, '').trim();
+    report = JSON.parse(clean);
+  } catch(e) {
+    // 如果 JSON 解析失敗，用舊方式顯示
+    const resultEl = document.getElementById('analysis-result');
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `<div class="report-section"><div class="report-content" style="white-space:pre-wrap;">${escHtml(aiText)}</div></div>`;
+    return;
+  }
+
   const resultEl = document.getElementById('analysis-result');
   resultEl.style.display = 'block';
 
   const now = new Date();
   const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
 
-  resultEl.innerHTML = `
+  // 客戶資料卡
+  const clientCard = `
     <div class="report-header">
       <div class="report-badge">MOHAN DESIGN · AI BRAND INTELLIGENCE REPORT</div>
-      <div class="report-brand-name">${data.brandNameCN}${data.brandNameEN ? ' · ' + data.brandNameEN : ''}</div>
-      <div class="report-date">分析日期 ${dateStr} · ${data.industry} · 聯繫人：${data.contactName || '—'}</div>
+      <div class="report-brand-name">${escHtml(data.brandNameCN)}${data.brandNameEN ? ' · ' + escHtml(data.brandNameEN) : ''}</div>
+      <div class="report-date">分析日期 ${dateStr} · ${escHtml(data.industry)} · 聯繫人：${escHtml(data.contactName || '—')}</div>
     </div>
+    <div class="report-section">
+      <div class="report-section-title">📋 BRAND CORE DNA</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          <div style="font-size:10px;font-family:'DM Mono',monospace;letter-spacing:.2em;color:var(--grey);margin-bottom:12px;text-transform:uppercase;">品牌起源與創立動機</div>
+          <div style="font-size:13px;line-height:1.9;color:var(--ink-soft);">${escHtml(data.mission)}${data.story ? '
 
-    ${renderSection('市場定位分析', sections['市場定位分析'] || aiText, '📍 MARKET POSITIONING')}
-    ${renderSection('目標客群人格畫像', sections['目標客群人格畫像'] || '', '👤 AUDIENCE PERSONA')}
-    ${renderSection('品牌人格與心理學定位', sections['品牌人格與心理學定位'] || '', '🧠 BRAND ARCHETYPE')}
-    ${renderColorSection(sections['色彩策略建議'] || '')}
-    ${renderSection('LOGO 視覺策略建議', sections['LOGO 視覺策略建議'] || '', '✦ VISUAL STRATEGY')}
-    ${renderDesignerNote(sections['設計師執行注意事項'] || '')}
+' + escHtml(data.story) : ''}</div>
+          ${data.value ? `<div style="margin-top:12px;font-size:13px;color:var(--ink-soft);">${escHtml(data.value)}</div>` : ''}
+        </div>
+        <div>
+          <div style="font-size:10px;font-family:'DM Mono',monospace;letter-spacing:.2em;color:var(--grey);margin-bottom:12px;text-transform:uppercase;">重要性與社會貢獻</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            ${renderInfoCell('聯繫人', data.contactName || '—')}
+            ${renderInfoCell('產業類別', data.industry || '—')}
+            ${renderInfoCell('視覺風格', data.visualStyle || '—')}
+            ${renderInfoCell('目標客群', data.targetAge || '—')}
+            ${renderInfoCell('消費層級', data.targetTier || '—')}
+            ${renderInfoCell('分析日期', dateStr)}
+          </div>
+        </div>
+      </div>
+    </div>`;
 
+  // 市場框架進度條 + 人格原型圓形圖
+  const scoresAndArchetype = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div class="report-section">
+        <div class="report-section-title">📊 MARKET ALIGNMENT</div>
+        ${(report.market_scores || []).map(s => `
+          <div class="score-row">
+            <div class="score-label">${escHtml(s.label)}</div>
+            <div class="score-bar-wrap"><div class="score-bar-fill" style="width:${s.score}%"></div></div>
+            <div class="score-num">${s.score}%</div>
+          </div>`).join('')}
+      </div>
+      <div class="report-section">
+        <div class="report-section-title">🧠 BRAND ARCHETYPE</div>
+        <div style="display:flex;justify-content:center;gap:24px;flex-wrap:wrap;padding:8px 0;">
+          ${(report.archetypes || []).map((a, i) => {
+            const colors = ['#b8935a','#2c4a3e','#8a7f74'];
+            const c = colors[i] || '#b8935a';
+            const r = 36, circ = 2 * Math.PI * r;
+            const dash = (a.pct / 100) * circ;
+            return `<div style="text-align:center;">
+              <div style="position:relative;width:90px;height:90px;margin:0 auto 8px;">
+                <svg width="90" height="90" style="transform:rotate(-90deg);">
+                  <circle cx="45" cy="45" r="${r}" fill="none" stroke="#ece4d4" stroke-width="8"/>
+                  <circle cx="45" cy="45" r="${r}" fill="none" stroke="${c}" stroke-width="8"
+                    stroke-dasharray="${dash.toFixed(1)} ${(circ-dash).toFixed(1)}" stroke-linecap="round"/>
+                </svg>
+                <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:15px;font-weight:700;color:${c};">${a.pct}%</div>
+              </div>
+              <div style="font-size:13px;font-weight:600;color:var(--ink);">${escHtml(a.name)}原型</div>
+              <div style="font-size:11px;color:var(--grey);margin-top:4px;max-width:100px;">${escHtml(a.desc || '')}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="font-size:13px;line-height:1.8;color:var(--ink-soft);margin-top:12px;">${escHtml(report.archetype_analysis || '')}</div>
+      </div>
+    </div>`;
+
+  // 市場定位 + 客群畫像
+  const marketPersona = `
+    <div class="report-section">
+      <div class="report-section-title">📍 MARKET POSITIONING</div>
+      <div class="report-content">${escHtml(report.market || '')}</div>
+    </div>
+    <div class="report-section">
+      <div class="report-section-title">👤 AUDIENCE PERSONA</div>
+      <div class="report-content">${escHtml(report.persona || '')}</div>
+    </div>`;
+
+  // 色彩策略
+  const colorSection = `
+    <div class="report-section">
+      <div class="report-section-title">🎨 COLOR STRATEGY</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:16px 0;">
+        ${(report.colors || []).map(c => `
+          <div style="text-align:center;">
+            <div style="width:100%;height:72px;border-radius:8px;background:${escHtml(c.hex)};border:1px solid rgba(0,0,0,0.08);margin-bottom:8px;"></div>
+            <div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:2px;">${escHtml(c.role)}</div>
+            <div style="font-size:11px;color:var(--grey);margin-bottom:2px;">${escHtml(c.name)}</div>
+            <div style="font-size:9px;font-family:'DM Mono',monospace;color:var(--gold);">${escHtml(c.hex)}</div>
+          </div>`).join('')}
+      </div>
+      <div class="report-content">${escHtml(report.color_analysis || '')}</div>
+      <div class="report-content" style="margin-top:8px;">
+        ${(report.colors || []).map(c => `<div style="margin-bottom:6px;"><strong>${escHtml(c.role)}：${escHtml(c.name)}</strong>（${escHtml(c.desc)}）</div>`).join('')}
+      </div>
+    </div>`;
+
+  // 視覺策略
+  const visualSection = `
+    <div class="report-section">
+      <div class="report-section-title">✦ VISUAL STRATEGY</div>
+      <div class="report-content">${escHtml(report.visual || '')}</div>
+    </div>`;
+
+  // 設計師備忘
+  const designerSection = `
+    <div class="report-section">
+      <div class="report-section-title">📐 DESIGNER BRIEF</div>
+      <div class="designer-note">
+        <div class="designer-note-title">設計師執行備忘</div>
+        <div class="designer-note-content">
+          ${(report.designer_notes || []).map((n, i) => `<div style="margin-bottom:8px;">${i+1}. ${escHtml(n)}</div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+
+  // 三欄卡片
+  const threeCards = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;">
+      ${renderCard('品牌核心價值', report.brand_values || '')}
+      ${renderCard('市場競爭定位', report.market_position || '')}
+      ${renderCard('成長路徑展望', report.growth_vision || '')}
+    </div>`;
+
+  // 頁尾
+  const footer = `
+    <div style="background:var(--cream-dark);padding:16px 40px;display:flex;justify-content:space-between;align-items:center;border-radius:0 0 8px 8px;margin-top:4px;">
+      <span style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--ink);font-style:italic;">Mohan Design</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--grey);">墨翰設計有限公司 · AI Brand Intelligence · ${dateStr}</span>
+    </div>`;
+
+  // 匯出按鈕
+  const exportBar = `
     <div class="export-bar">
       <button class="btn-export" id="btn-png" onclick="downloadPNG()">↓ 下載 PNG</button>
       <button class="btn-export" onclick="window.print()">🖨 列印 PDF</button>
       <button class="btn-export" onclick="copyReport()">複製全文</button>
       <button class="btn-export-primary" onclick="location.reload()">+ 新增品牌分析</button>
-    </div>
-  <div id="print-card" style="position:fixed;left:-9999px;top:0;width:1000px;background:#faf8f4;display:block;"></div>
-  `;
+    </div>`;
+
+  resultEl.innerHTML = clientCard + scoresAndArchetype + marketPersona + colorSection + visualSection + designerSection + threeCards + footer + exportBar;
+
+  // 觸發進度條動畫
+  setTimeout(() => {
+    resultEl.querySelectorAll('.score-bar-fill').forEach(el => {
+      el.style.transition = 'width 1s ease 0.3s';
+    });
+  }, 100);
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function renderSection(title, content, badge) {
-  if (!content) return '';
-  
-  let extra = '';
-  // 人格原型 - 加圓形圖
-  if (title === '品牌人格與心理學定位') {
-    const archetypes = ['英雄', '創造者', '照顧者', '統治者', '探索者', '智者', '魔法師', '普通人', '天真者', '弄臣', '情人', '亡命徒'];
-    const found = archetypes.filter(a => content.includes(a));
-    if (found.length > 0) {
-      const pct = found.length === 1 ? [100] : found.length === 2 ? [60, 40] : [50, 30, 20];
-      extra = '<div style="display:flex;gap:20px;flex-wrap:wrap;margin:16px 0;">';
-      found.slice(0, 3).forEach((name, i) => {
-        const p = pct[i] || 30;
-        const colors = ['#b8935a', '#2c4a3e', '#8a7f74'];
-        extra += `<div style="text-align:center;min-width:100px;">
-          <div style="position:relative;width:80px;height:80px;margin:0 auto 8px;">
-            <svg width="80" height="80" style="transform:rotate(-90deg);">
-              <circle cx="40" cy="40" r="32" fill="none" stroke="#ece4d4" stroke-width="8"/>
-              <circle cx="40" cy="40" r="32" fill="none" stroke="${colors[i]}" stroke-width="8"
-                stroke-dasharray="${p * 2.01} ${(100-p) * 2.01}" stroke-linecap="round"/>
-            </svg>
-            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:14px;font-weight:700;color:${colors[i]};">${p}%</div>
-          </div>
-          <div style="font-size:12px;font-weight:600;color:#3d342b;">${name}原型</div>
-        </div>`;
-      });
-      extra += '</div>';
-    }
-  }
-  
-  return `
-    <div class="report-section">
-      <div class="report-section-title">${badge || title}</div>
-      ${extra}
-      <div class="report-content">${escHtml(content.trim())}</div>
-    </div>`;
+function renderInfoCell(label, value) {
+  return `<div style="background:rgba(26,20,16,0.04);border-radius:4px;padding:10px 12px;">
+    <div style="font-size:9px;font-family:'DM Mono',monospace;letter-spacing:.15em;color:var(--grey);margin-bottom:3px;text-transform:uppercase;">${label}</div>
+    <div style="font-size:13px;font-weight:600;color:var(--ink);">${value}</div>
+  </div>`;
 }
 
-function renderColorSection(content) {
-  if (!content) return '';
-  const colorMatches = content.match(/#[0-9A-Fa-f]{6}/g) || [];
-  // 從每行抓取顏色名稱
-  const lines = content.split('\n');
-  const colorNames = [];
-  const colorDescs = [];
-  ['主色', '輔助色', '強調色', '禁用色'].forEach(key => {
-    const line = lines.find(l => l.includes(key + '：') || l.includes(key + ':'));
-    if (line) {
-      const nameMatch = line.match(/：([^（(]+)/);
-      colorNames.push(nameMatch ? nameMatch[1].trim() : key);
-      const descMatch = line.match(/[（(]([^）)]+)/);
-      colorDescs.push(descMatch ? descMatch[1].trim() : '');
-    } else {
-      colorNames.push('');
-      colorDescs.push('');
-    }
-  });
-
-  let swatchHtml = '';
-  if (colorMatches.length > 0) {
-    swatchHtml = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:20px 0;">';
-    const labels = ['主色', '輔助色', '強調色', '禁用色'];
-    colorMatches.slice(0, 4).forEach((color, i) => {
-      swatchHtml += `<div style="text-align:center;">
-        <div style="width:100%;height:80px;border-radius:8px;background:${color};border:1px solid rgba(0,0,0,0.1);margin-bottom:8px;"></div>
-        <div style="font-size:11px;font-weight:600;color:#3d342b;margin-bottom:2px;">${labels[i]}</div>
-        <div style="font-size:10px;color:#8a7f74;margin-bottom:2px;">${colorNames[i]}</div>
-        <div style="font-size:9px;font-family:DM Mono,monospace;color:#b8935a;">${color}</div>
-      </div>`;
-    });
-    swatchHtml += '</div>';
-  }
-  
-  return `
-    <div class="report-section">
-      <div class="report-section-title">🎨 COLOR STRATEGY</div>
-      ${swatchHtml}
-      <div class="report-content" style="margin-top:12px;">${escHtml(content.trim())}</div>
-    </div>`;
-}
-
-function renderDesignerNote(content) {
-  if (!content) return '';
-  return `
-    <div class="report-section">
-      <div class="report-section-title">📐 DESIGNER BRIEF</div>
-      <div class="designer-note">
-        <div class="designer-note-title">設計師執行備忘</div>
-        <div class="designer-note-content">${escHtml(content.trim())}</div>
-      </div>
-    </div>`;
+function renderCard(title, content) {
+  return `<div style="background:var(--white);border:1.5px solid var(--cream-dark);border-radius:8px;padding:24px;">
+    <div style="font-size:10px;font-family:'DM Mono',monospace;letter-spacing:.2em;color:var(--grey);margin-bottom:12px;text-transform:uppercase;">CARD · DNA SUMMARY</div>
+    <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:12px;">${title}</div>
+    <div style="font-size:12px;line-height:1.8;color:var(--ink-soft);">${escHtml(content)}</div>
+    <div style="margin-top:12px;font-family:'DM Serif Display',serif;font-size:13px;color:var(--grey);font-style:italic;">Mohan Design</div>
+  </div>`;
 }
 
 function parseAISections(text) {
@@ -1375,7 +1443,7 @@ function parseAISections(text) {
 }
 
 function escHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function renderError() {
