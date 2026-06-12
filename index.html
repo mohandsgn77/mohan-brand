@@ -1277,9 +1277,7 @@ function renderReport(data, aiText) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
         <div>
           <div style="font-size:10px;font-family:'DM Mono',monospace;letter-spacing:.2em;color:var(--grey);margin-bottom:12px;text-transform:uppercase;">品牌起源與創立動機</div>
-          <div style="font-size:13px;line-height:1.9;color:var(--ink-soft);">${escHtml(data.mission)}${data.story ? '
-
-' + escHtml(data.story) : ''}</div>
+          <div style="font-size:13px;line-height:1.9;color:var(--ink-soft);">${escHtml(data.mission)}${data.story ? '<br><br>' + escHtml(data.story) : ''}</div>
           ${data.value ? `<div style="margin-top:12px;font-size:13px;color:var(--ink-soft);">${escHtml(data.value)}</div>` : ''}
         </div>
         <div>
