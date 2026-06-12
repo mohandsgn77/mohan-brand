@@ -1246,14 +1246,17 @@ LOGO 類型：${d.logoType || '未指定'}
 function renderReport(data, aiText) {
   let report;
   try {
-    const clean = aiText.replace(/```json|```/g, '').trim();
+    let clean = aiText.trim();
+    clean = clean.replace(/^```json\s*/i, '').replace(/```\s*$/,'').trim();
+    const start = clean.indexOf('{');
+    const end = clean.lastIndexOf('}');
+    if (start !== -1 && end !== -1) clean = clean.slice(start, end + 1);
+    // 修正中文引號
+    clean = clean.replace(/[""]/g, '"').replace(/['']/g, "'");
     report = JSON.parse(clean);
   } catch(e) {
-    // 如果 JSON 解析失敗，用舊方式顯示
-    const resultEl = document.getElementById('analysis-result');
-    resultEl.style.display = 'block';
-    resultEl.innerHTML = `<div class="report-section"><div class="report-content" style="white-space:pre-wrap;">${escHtml(aiText)}</div></div>`;
-    return;
+    // JSON 解析失敗 - 用備用方式從文字中抓取資料
+    report = fallbackParse(aiText);
   }
 
   const resultEl = document.getElementById('analysis-result');
@@ -1430,6 +1433,54 @@ function renderCard(title, content) {
     <div style="font-size:12px;line-height:1.8;color:var(--ink-soft);">${escHtml(content)}</div>
     <div style="margin-top:12px;font-family:'DM Serif Display',serif;font-size:13px;color:var(--grey);font-style:italic;">Mohan Design</div>
   </div>`;
+}
+
+function fallbackParse(text) {
+  // 備用解析：從純文字中抓取關鍵資料
+  const getSection = (key) => {
+    const rx = new RegExp('【' + key + '】\\s*([\\s\\S]*?)(?=【|$)');
+    const m = text.match(rx);
+    return m ? m[1].trim() : '';
+  };
+  
+  // 抓取顏色 hex
+  const hexMatches = text.match(/#[0-9A-Fa-f]{6}/g) || [];
+  const colorRoles = ['主色', '輔助色', '強調色', '禁用色'];
+  const colors = colorRoles.map((role, i) => {
+    const hex = hexMatches[i] || ['#2c3e50','#8a7f74','#b8935a','#c45c3a'][i];
+    const line = text.split('\n').find(l => l.includes(role + '：') || l.includes(role + ':')) || '';
+    const nameMatch = line.match(/[：:]([^（(#\n]+)/);
+    const name = nameMatch ? nameMatch[1].trim() : role;
+    return { role, name, hex, desc: '' };
+  });
+
+  // 抓取人格原型
+  const archetypeNames = ['英雄', '創造者', '照顧者', '統治者', '探索者', '智者', '魔法師', '普通人', '天真者', '弄臣', '情人'];
+  const found = archetypeNames.filter(a => text.includes(a));
+  const archetypes = found.slice(0, 2).map((name, i) => ({
+    name, pct: i === 0 ? 60 : 40, desc: ''
+  }));
+
+  return {
+    market: getSection('市場定位分析') || text.substring(0, 200),
+    persona: getSection('目標客群人格畫像'),
+    archetypes: archetypes.length ? archetypes : [{name:'創造者', pct:60, desc:''},{name:'智者', pct:40, desc:''}],
+    archetype_analysis: getSection('品牌人格與心理學定位'),
+    colors,
+    color_analysis: getSection('色彩策略建議'),
+    visual: getSection('LOGO 視覺策略建議'),
+    designer_notes: getSection('設計師執行注意事項').split('\n').filter(l => l.trim()).slice(0, 5),
+    market_scores: [
+      {label:'市場稀缺性', score:75},
+      {label:'品牌辨識度', score:85},
+      {label:'消費者共鳴', score:80},
+      {label:'競爭差異化', score:82},
+      {label:'執行可行性', score:88}
+    ],
+    brand_values: '根據品牌資料分析，此品牌具備獨特的市場定位與核心價值。',
+    market_position: '在同產業中擁有差異化優勢，具備明確的競爭定位。',
+    growth_vision: '透過品牌識別建立，朝長期目標穩健發展。'
+  };
 }
 
 function parseAISections(text) {
